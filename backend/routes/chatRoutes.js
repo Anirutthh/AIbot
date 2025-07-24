@@ -1,32 +1,28 @@
 const express = require("express");
 const router = express.Router();
-const OpenAI = require("openai");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || "your-api-key-here", // fallback if not using .env
-});
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "your-fallback-api-key");
 
-router.post("/chat", async (req, res) => {
+router.post("/", async (req, res) => {
   try {
     const prompt = req.body.prompt;
-    console.log("🔹 Prompt received from frontend:", prompt); // ✅ Debug
+    console.log("📩 Received Prompt:", prompt);
 
     if (!prompt) {
-      console.log("❌ No prompt received");
       return res.status(400).json({ error: "Prompt is required" });
     }
 
-    const chatCompletion = await openai.chat.completions.create({
-      messages: [{ role: "user", content: prompt }],
-      model: "gpt-3.5-turbo",
-    });
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
 
-    console.log("✅ OpenAI Response:", chatCompletion.choices[0].message.content);
-
-    res.json({ reply: chatCompletion.choices[0].message.content });
+    console.log("✅ Gemini Response:", text);
+    res.json({ message: text });
   } catch (error) {
-    console.error("❌ Error in /chat route:", error);
-    res.status(500).json({ error: "Something went wrong in backend" });
+    console.error("❌ Gemini Error:", error);
+    res.status(500).json({ error: "Something went wrong with Gemini" });
   }
 });
 
