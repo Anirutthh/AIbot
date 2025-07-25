@@ -1,57 +1,51 @@
-require("dotenv").config();
-const fs = require("fs");
+
+
 const express = require("express");
-const mongoose = require("mongoose");
 const cors = require("cors");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const dotenv = require("dotenv");
+const mongoose = require("mongoose");
+const { CohereClient } = require("cohere-ai");
+
+dotenv.config();
+
+// ✅ Check env variables
+console.log("✅ .env loaded:", !!process.env.COHERE_API_KEY);
+console.log("🔐 Using Cohere API Key:", process.env.COHERE_API_KEY);
+
+// ✅ Initialize Cohere client
+const cohere = new CohereClient({
+  token: process.env.COHERE_API_KEY,
+});
+module.exports.cohere = cohere;
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const chatRoutes = require("./routes/chatRoutes");
 
-// ✅ Show .env debug info
-console.log("✅ .env exists:", fs.existsSync("./.env"));
-console.log("✅ Raw .env content:\n", fs.readFileSync("./.env", "utf-8"));
-console.log("🔐 Your Gemini API Key:", process.env.GEMINI_API_KEY);
-
-// ✅ Middleware
-app.use(cors());
+// ✅ Middlewares
+app.use(cors({
+  origin: "http://localhost:3000", // 👈 your frontend origin
+  credentials: true                // 👈 allow cookies/auth headers
+}));
 app.use(express.json());
 
-// ✅ Gemini Setup
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "models/gemini-pro" });
+// ✅ API Routes
+app.use("/api/cohere", require("./routes/chatRoutes"));
 
-// ✅ MongoDB Connection
+
+
+// ✅ Root Test Route
+app.get("/", (req, res) => {
+  res.send("Hello from Smarti AI Chatbot Backend!");
+});
+
+// ✅ MongoDB Connect
 mongoose
   .connect(process.env.MONGO_URI)
-  .then(() => console.log("✅ MongoDB connected successfully!"))
-  .catch((err) => console.error("❌ MongoDB connection error:", err));
-
-// ✅ Gemini Chat Endpoint
-app.post("/api/gemini", async (req, res) => {
-  try {
-    const userPrompt = req.body.prompt;
-    if (!userPrompt) {
-      return res.status(400).json({ error: "Prompt is missing" });
-    }
-
-    const result = await model.generateContent(userPrompt);
-    const response = await result.response;
-    const text = response.text();
-
-    res.json({ message: text });
-  } catch (error) {
-    console.error("❌ Gemini API Error:", error);
-    res.status(500).json({ error: "Something went wrong with Gemini API" });
-  }
-});
-
-// ✅ Health check
-app.get("/", (req, res) => {
-  res.send("✅ Gemini server is running");
-});
+  .then(() => console.log("✅ Connected to MongoDB"))
+  .catch((err) => console.error("❌ MongoDB Error:", err));
 
 // ✅ Start Server
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`✅ Gemini Server running at http://localhost:${PORT}`);
+  console.log(`🚀 Server running at http://localhost:${PORT}`);
 });

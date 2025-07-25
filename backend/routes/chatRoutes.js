@@ -1,28 +1,30 @@
 const express = require("express");
 const router = express.Router();
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { cohere } = require("../index"); // ✅ Using the same instance
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "your-fallback-api-key");
-
-router.post("/", async (req, res) => {
+router.post("/chat", async (req, res) => {
   try {
-    const prompt = req.body.prompt;
+    const { prompt } = req.body;
     console.log("📩 Received Prompt:", prompt);
 
-    if (!prompt) {
-      return res.status(400).json({ error: "Prompt is required" });
+    const response = await cohere.generate({
+      model: "command",
+      prompt,
+      max_tokens: 150,
+      temperature: 0.7,
+    });
+
+    const generatedText = response.generations[0]?.text?.trim();
+
+    if (!generatedText) {
+      return res.status(500).json({ message: "No text generated from Cohere." });
     }
 
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
+    res.status(200).json({ message: generatedText });
 
-    console.log("✅ Gemini Response:", text);
-    res.json({ message: text });
   } catch (error) {
-    console.error("❌ Gemini Error:", error);
-    res.status(500).json({ error: "Something went wrong with Gemini" });
+    console.error("❌ Cohere Error:", error);
+    res.status(500).json({ message: "Something went wrong while generating text." });
   }
 });
 
