@@ -1,17 +1,30 @@
 const express = require("express");
 const router = express.Router();
-const { cohere } = require("../index"); // ✅ Cohere client
-const Chat = require("../models/Chat"); // ✅ Mongoose Chat model
+const { cohere } = require("../index");
+const Chat = require("../models/Chat");
 
+// ⬇️ POST /api/chat — memory-enabled chat
 router.post("/chat", async (req, res) => {
   try {
-    const { prompt } = req.body;
+    const { prompt, user = "Anonymous" } = req.body;
     console.log("📩 Received Prompt:", prompt);
 
-    // ✅ Generate response from Cohere
+    // ✅ 1. Fetch previous messages from DB (for memory)
+    const previousChats = await Chat.find({ user }).sort({ createdAt: 1 }); // Oldest first
+
+    // ✅ 2. Build history into a single string for Cohere prompt
+    let history = "";
+    for (const chat of previousChats) {
+      history += `User: ${chat.prompt}\nAI: ${chat.response}\n`;
+    }
+
+    // ✅ 3. Append current prompt
+    const fullPrompt = `${history}User: ${prompt}\nAI:`;
+
+    // ✅ 4. Send to Cohere
     const response = await cohere.generate({
       model: "command",
-      prompt,
+      prompt: fullPrompt,
       max_tokens: 150,
       temperature: 0.7,
     });
@@ -22,14 +35,14 @@ router.post("/chat", async (req, res) => {
       return res.status(500).json({ message: "No text generated from Cohere." });
     }
 
-    // ✅ Save the chat to MongoDB
+    // ✅ 5. Save the current chat
     await Chat.create({
-      user: "Anonymous",       // Later we can use real user after login
-      prompt: prompt,          // what user typed
-      response: generatedText, // what cohere replied
+      user,
+      prompt,
+      response: generatedText,
     });
 
-    // ✅ Return the response
+    // ✅ 6. Return response to frontend
     res.status(200).json({ message: generatedText });
 
   } catch (error) {
@@ -37,5 +50,16 @@ router.post("/chat", async (req, res) => {
     res.status(500).json({ message: "Something went wrong while generating text." });
   }
 });
+
+router.get("/history", async (req, res) => {
+  try {
+    const chats = await Chat.find({ user: "Anonymous" }).sort({ createdAt: 1 });
+    res.json(chats);
+  } catch (err) {
+    console.error("❌ History Error:", err);
+    res.status(500).json({ message: "Failed to load history." });
+  }
+});
+
 
 module.exports = router;
